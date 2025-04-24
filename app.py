@@ -44,7 +44,7 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df = pd.read_csv(CSV_PATH, encoding= 'utf-8')
     date_filter = request.args.get('date', '')
     part_no_filter = request.args.get('part_no', '').upper()
     alc_filter = request.args.get('alc', '').upper()
