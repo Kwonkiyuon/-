@@ -3,7 +3,7 @@ import sqlite3
 import pandas as pd
 
 app = Flask(__name__)
-DB_PATH = '통합생산량.db'
+DB_PATH = 'default.db'
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
