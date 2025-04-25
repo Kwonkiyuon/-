@@ -1,21 +1,20 @@
 from flask import Flask, render_template_string, request
-import sqlite3
 import pandas as pd
 import os
 import requests
 
 app = Flask(__name__)
 
-DB_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/default.db"
-DB_PATH = "/tmp/default.db"
+CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/통합생산량.csv"
+CSV_PATH = "통합생산량.csv"
 
-# DB가 없으면 GitHub Releases에서 다운로드
-if not os.path.exists(DB_PATH):
-    print("DB 파일이 없습니다. GitHub에서 다운로드 중...")
-    response = requests.get(DB_URL)
-    with open(DB_PATH, "wb") as f:
+# CSV가 없으면 GitHub에서 다운로드
+if not os.path.exists(CSV_PATH):
+    print("CSV 파일이 없습니다. GitHub에서 다운로드 중...")
+    response = requests.get(CSV_URL)
+    with open(CSV_PATH, "wb") as f:
         f.write(response.content)
-    print("DB 다운로드 완료!")
+    print("CSV 다운로드 완료!")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -57,31 +56,23 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
+    df = pd.read_csv(CSV_PATH, encoding='utf-8')
+    
     date_filter = request.args.get('date', '')
     part_no_filter = request.args.get('part_no', '').upper()
     alc_filter = request.args.get('alc', '').upper()
     error = ''
 
-    query = "SELECT * FROM 생산량 WHERE 1=1"
-    params = []
-
     if not (date_filter or part_no_filter or alc_filter):
-        df = pd.DataFrame(columns=["ID", "바디넘버", "공정", "부품명", "부품 번호", "ALC", "인덱스값", "part order start date", "part order done date", "차종"])
+        df = df.iloc[0:0]
         error = '조회하려면 날짜나 ALC 코드를 입력해주세요.'
     else:
         if alc_filter:
-            query += " AND UPPER(ALC) LIKE ?"
-            params.append(f"%{alc_filter}%")
+            df = df[df['ALC'].astype(str).str.upper().str.contains(alc_filter)]
         if part_no_filter:
-            query += " AND UPPER(부품_번호) LIKE ?"
-            params.append(f"%{part_no_filter}%")
+            df = df[df['부품 번호'].astype(str).str.upper().str.contains(part_no_filter)]
         if date_filter:
-            query += " AND part_order_done_date LIKE ?"
-            params.append(f"{date_filter}%")
-
-        conn = sqlite3.connect(DB_PATH)
-        df = pd.read_sql_query(query, conn, params=params)
-        conn.close()
+            df = df[df['part order done date'].astype(str).str.startswith(date_filter)]
 
     return render_template_string(HTML_TEMPLATE, data=df, request=request, error=error)
 
