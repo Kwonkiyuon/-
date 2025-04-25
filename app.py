@@ -1,63 +1,63 @@
-플라스크 가져오기 플라스크, render_template_string, 요청
-sqlite3 가져오기
-판다를 PD로 가져오기
-os 가져오기
-가져오기 요청
+from flask import Flask, render_template_string, request
+import sqlite3
+import pandas as pd
+import os
+import requests
 
-앱 = 플라스크(__name__)
+app = Flask(__name__)
 
-DB_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/default.db "
+DB_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/default.db"
 DB_PATH = "default.db"
 
-# DB 가 없으면 GitHub, 에서 다운로드 출시
-그렇지 않은 경우 os.path.exists(DB_PATH):
-    인쇄("DB 파일이 없습니다. GitHub에서 다운로드 중...")
- 응답 = requests.get(DB_URL)
- open(DB_PATH, "wb")을 f로 사용합니다:
- f.write(응답.content)
-    인쇄("DB 다운로드 완료!")
+# DB가 없으면 GitHub Releases에서 다운로드
+if not os.path.exists(DB_PATH):
+    print("DB 파일이 없습니다. GitHub에서 다운로드 중...")
+    response = requests.get(DB_URL)
+    with open(DB_PATH, "wb") as f:
+        f.write(response.content)
+    print("DB 다운로드 완료!")
 
-HTML_TEMPLATE = ""
-<!DOCTYPE HTML>
+HTML_TEMPLATE = """
+<!DOCTYPE html>
 <html>
-<머리>
- <title>다차종 생산량 뷰어</title>
- <스타일>
- 본문 {폰트 패밀리}: 에어리얼, 산세리프; 패딩: 20px; }
- 테이블 {경계-collapse: 붕괴; 너비: 100%; 여백 상단: 20 px; }
- td {경계}: 1 px 솔리드 #ccc; 패딩: 8 px; 텍스트 align: 왼쪽; }
- th { background-color: #f2f2f2; }
- 입력[type=text], 입력[type=date] {패딩: 5 px; 여백-오른쪽: 10 px; }
- .오류 {색: 빨간색; 여백 상단: px 10개; }
- </스타일>
-</머리>
-<바디>
- <h1>다차종 일일 생산량 조회</h1>
- <form method='get'>
- 날짜(완료 날짜): <입력 유형='날짜' 이름='날짜' 값='{{request.args.get ("date", "")}}'>
- 부품 번호: <입력 유형='text' name='part_no' 값='{{request.args.get ("part_no", "")}}'>
- ALC 코드: <입력 유형='텍스트' 이름='alc' 값='{{request.args.get ("alc", "")}}'>
- <버튼 유형='submit'>조회</버튼>
- </형식>
- {% 오류 %}인 경우
- <p class='error'>{{오류 }}/p>
- {% 끝이 %}인 경우
- {% 데이터가 있는 경우.모양 [0] > 0 %}
- <p><강한>총 생산 수량: {{데이터}.모양[0]} EA </strong></p>
- <표>
- 콜린 데이터의 경우 <tr>{%}.columns %} 워싱 {{ 콜}}/th>{% 끝: %}/tr>
- {% _의 경우, data.iterrows () %} 행
- 콜린 데이터의 경우 <tr>{%}<columns %}<td>{{row[col]}}</%의 경우 td>{% 끝}</tr>
- {% %}에 대한 끝
- </표>
- {% 끝이 %}인 경우
+<head>
+    <title>다차종 생산량 뷰어</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        input[type=text], input[type=date] { padding: 5px; margin-right: 10px; }
+        .error { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>다차종 일일 생산량 조회</h1>
+    <form method='get'>
+        날짜 (Done Date): <input type='date' name='date' value='{{ request.args.get("date", "") }}'>
+        부품 번호: <input type='text' name='part_no' value='{{ request.args.get("part_no", "") }}'>
+        ALC 코드: <input type='text' name='alc' value='{{ request.args.get("alc", "") }}'>
+        <button type='submit'>조회</button>
+    </form>
+    {% if error %}
+        <p class='error'>{{ error }}</p>
+    {% endif %}
+    {% if data.shape[0] > 0 %}
+        <p><strong>총 생산 수량: {{ data.shape[0] }} EA</strong></p>
+        <table>
+            <tr>{% for col in data.columns %}<th>{{ col }}</th>{% endfor %}</tr>
+            {% for _, row in data.iterrows() %}
+            <tr>{% for col in data.columns %}<td>{{ row[col] }}</td>{% endfor %}</tr>
+            {% endfor %}
+        </table>
+    {% endif %}
 </body>
 </html>
 """
 
-@app.route('/'
-인덱스 () 정의:
- date_filter = request.args.get ('date, ')
+@app.route('/')
+def index():
+    date_filter = request.args.get('date', '')
     part_no_filter = request.args.get('part_no', '').upper()
     alc_filter = request.args.get('alc', '').upper()
     error = ''
