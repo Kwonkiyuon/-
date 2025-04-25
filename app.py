@@ -7,7 +7,7 @@ import requests
 app = Flask(__name__)
 
 DB_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/default.db"
-DB_PATH = /tmp/default.db
+DB_PATH = "/tmp/default.db"
 
 # DB가 없으면 GitHub Releases에서 다운로드
 if not os.path.exists(DB_PATH):
