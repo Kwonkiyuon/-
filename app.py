@@ -5,8 +5,8 @@ import requests
 
 app = Flask(__name__)
 
-CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/통합생산량.csv"
-CSV_PATH = "통합생산량.csv"
+CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/default.csv"
+CSV_PATH = "/tmp/default.csv"
 
 # CSV가 없으면 GitHub에서 다운로드
 if not os.path.exists(CSV_PATH):
@@ -57,7 +57,7 @@ HTML_TEMPLATE = """
 @app.route('/')
 def index():
     df = pd.read_csv(CSV_PATH, encoding='utf-8')
-    
+
     date_filter = request.args.get('date', '')
     part_no_filter = request.args.get('part_no', '').upper()
     alc_filter = request.args.get('alc', '').upper()
