@@ -37,7 +37,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="header">
         <h1>다차종 일일 생산량 조회</h1>
-        <img src="/static/현대인 마크.png" class="logo">
+        <img src="/static/현대인 마크.png" style="position: absolute; top: 10px; right: 10px; height: 50px;">
     </div>
     <form method='get'>
         시작 날짜: <input type='date' name='start_date' value='{{ request.args.get("start_date", "") }}'>
