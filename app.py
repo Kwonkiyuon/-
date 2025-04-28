@@ -5,10 +5,10 @@ import requests
 
 app = Flask(__name__)
 
-CSV_URL = CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.csv"
+CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
-# CSV가 없으면 GitHub에서 다운로드
+# CSV 파일이 없으면 다운로드
 if not os.path.exists(CSV_PATH):
     print("CSV 파일이 없습니다. GitHub에서 다운로드 중...")
     response = requests.get(CSV_URL)
@@ -56,13 +56,16 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    df = pd.read_csv(CSV_PATH, encoding='utf-8')
+    try:
+        df = pd.read_csv(CSV_PATH, encoding='cp949')  # cp949로 읽기
+    except Exception as e:
+        return f"CSV 파일 읽기 오류: {str(e)}", 500
 
     date_filter = request.args.get('date', '')
     part_no_filter = request.args.get('part_no', '').upper()
     alc_filter = request.args.get('alc', '').upper()
     error = ''
-
+    
     if not (date_filter or part_no_filter or alc_filter):
         df = df.iloc[0:0]
         error = '조회하려면 날짜나 ALC 코드를 입력해주세요.'
