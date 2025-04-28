@@ -5,7 +5,7 @@ import requests
 
 app = Flask(__name__)
 
-CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.0/default.csv"
+CSV_URL = "CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
 # CSV가 없으면 GitHub에서 다운로드
