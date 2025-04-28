@@ -1,6 +1,6 @@
 from flask import Flask, render_template_string, request
-import pandas as pd
 import sqlite3
+import pandas as pd
 import os
 import requests
 from datetime import datetime
@@ -25,20 +25,20 @@ HTML_TEMPLATE = """
     <title>다차종 생산량 뷰어</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; }
-        .logo { height: 50px; }
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         th { background-color: #f2f2f2; }
         input[type=text], input[type=date] { padding: 5px; margin-right: 10px; }
         .error { color: red; margin-top: 10px; }
+        .logo { position: absolute; top: 10px; right: 10px; }
+        .logo img { width: 150px; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>다차종 일일 생산량 조회</h1>
-        <img src="/static/현대인 마크.png" style="position: absolute; top: 10px; right: 10px; height: 50px;">
+    <div class="logo">
+        <img src="/static/hdi_logo.png" alt="현대인 로고">
     </div>
+    <h1>다차종 일일 생산량 조회</h1>
     <form method='get'>
         시작 날짜: <input type='date' name='start_date' value='{{ request.args.get("start_date", "") }}'>
         종료 날짜: <input type='date' name='end_date' value='{{ request.args.get("end_date", "") }}'>
@@ -48,13 +48,18 @@ HTML_TEMPLATE = """
     {% if error %}
         <p class='error'>{{ error }}</p>
     {% endif %}
-    {% if results %}
+    {% if data.shape[0] > 0 %}
         <h2>생산량 조회 결과</h2>
-        <ul>
-            {% for item in results %}
-                <li>{{ item }}</li>
+        <table>
+            <tr>
+                {% for col in data.columns %}<th>{{ col }}</th>{% endfor %}
+            </tr>
+            {% for _, row in data.iterrows() %}
+            <tr>
+                {% for col in data.columns %}<td>{{ row[col] }}</td>{% endfor %}
+            </tr>
             {% endfor %}
-        </ul>
+        </table>
     {% endif %}
 </body>
 </html>
@@ -66,44 +71,46 @@ def index():
     end_date = request.args.get('end_date', '')
     alc_filter = request.args.get('alc', '').upper()
     error = ''
-    results = []
 
-    if not (start_date and end_date and alc_filter):
-        error = '조회하려면 시작일, 종료일, ALC 코드를 모두 입력해주세요.'
-    else:
-        try:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-            
-            if (end_dt - start_dt).days > 14:
-                error = '조회 기간은 최대 14일까지만 가능합니다.'
+    conn = sqlite3.connect(DB_PATH)
+
+    try:
+        if not alc_filter:
+            error = 'ALC 코드를 입력해주세요.'
+            df = pd.DataFrame()
+        elif not start_date or not end_date:
+            error = '시작 날짜와 종료 날짜를 모두 입력해주세요.'
+            df = pd.DataFrame()
+        else:
+            # 날짜 차이 계산
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            if (end_dt - start_dt).days > 13:
+                error = '조회 범위는 최대 14일 이내로 선택해주세요.'
+                df = pd.DataFrame()
             else:
-                conn = sqlite3.connect(DB_PATH)
                 query = """
-                    SELECT [part order done date], ALC, [부품명], [부품 번호]
+                    SELECT 
+                        part_order_done_date as 날짜,
+                        UPPER(ALC) as ALC,
+                        UPPER(부품명) as 부품명,
+                        UPPER(부품_번호) as 부품번호,
+                        COUNT(*) as 생산수량
                     FROM 생산량
-                    WHERE [part order done date] BETWEEN ? AND ?
-                    AND UPPER(ALC) LIKE ?
+                    WHERE 
+                        UPPER(ALC) LIKE ?
+                        AND part_order_done_date BETWEEN ? AND ?
+                    GROUP BY 날짜, ALC, 부품명, 부품번호
+                    ORDER BY 날짜, 부품명
                 """
-                params = (start_date, end_date, f"%{alc_filter}%")
-                df = pd.read_sql_query(query, conn, params=params)
-                conn.close()
+                df = pd.read_sql_query(query, conn, params=(f"%{alc_filter}%", start_date, end_date))
+    except Exception as e:
+        error = f"DB 조회 오류: {str(e)}"
+        df = pd.DataFrame()
+    finally:
+        conn.close()
 
-                if df.empty:
-                    error = '해당 조건에 맞는 데이터가 없습니다.'
-                else:
-                    grouped = df.groupby('part order done date')
-                    for date, group in grouped:
-                        if group['ALC'].nunique() > 1 or group['부품 번호'].nunique() > 1:
-                            for _, row in group.iterrows():
-                                results.append(f"{date} - {row['ALC']} - {row['부품명']} - {row['부품 번호']}")
-                        else:
-                            results.append(f"{date} - 생산량 {len(group)}개")
-
-        except Exception as e:
-            error = f"오류 발생: {str(e)}"
-
-    return render_template_string(HTML_TEMPLATE, results=results, request=request, error=error)
+    return render_template_string(HTML_TEMPLATE, data=df, request=request, error=error)
 
 if __name__ == '__main__':
     app.run(debug=True)
