@@ -40,7 +40,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="logo">
-        <img src="/static/현대인 로고.png" alt="현대인 로고">
+        <img src="/static/현대인 마크.png" alt="현대인 마크">
     </div>
     <h1>다차종 일일 생산량 조회</h1>
     <form method='get'>
@@ -82,7 +82,7 @@ def index():
     data = []
 
     if not alc_filter:
-        error = 'ALC 코드를 입력해 주세요.'
+        error = '날짜와, ALC 코드를 입력해 주세요.'
     else:
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -101,14 +101,14 @@ def index():
                 return render_template_string(HTML_TEMPLATE, data=[], request=request, error=error)
 
             query = """
-            SELECT
-                [part order done date] as 날짜,
-                UPPER(ALC) as ALC,
-                UPPER(부품명) as 부품명,
-                UPPER(부품_번호) as 부품번호,
-                COUNT(*) as 생산수량
+            SELECT 
+                [part order done date] AS 날짜,
+                UPPER(ALC) AS ALC,
+                UPPER(부품명) AS 부품명,
+                UPPER([부품 번호]) AS 부품번호,
+                COUNT(*) AS 생산수량
             FROM 생산량
-            WHERE
+            WHERE 
                 UPPER(ALC) LIKE ?
                 AND [part order done date] BETWEEN ? AND ?
             GROUP BY 날짜, ALC, 부품명, 부품번호
