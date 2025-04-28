@@ -32,6 +32,7 @@ HTML_TEMPLATE = """
         input[type="date"], input[type="text"] { padding: 5px; margin-right: 10px; }
         button { padding: 5px 10px; }
         .error { color: red; margin-top: 20px; font-weight: bold; }
+        .notice { margin-top: 20px; color: #555; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -43,9 +44,17 @@ HTML_TEMPLATE = """
     <form method="get">
         시작 날짜: <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
         종료 날짜: <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}">
+        부품명 키워드: <input type="text" name="part_name" value="{{ request.args.get('part_name', '') }}">
         ALC 코드: <input type="text" name="alc" value="{{ request.args.get('alc', '') }}">
         <button type="submit">조회</button>
     </form>
+
+    <div class="notice">
+        시작 날짜와 종료 날짜는 필수!<br>
+        부품명 또는 ALC 코드를 입력해주세요.<br>
+        부품명 입력 시 부품의 전체 ALC코드와 생산량을 볼 수 있고,<br>
+        ALC 코드를 입력 시 단일 부품만 알 수 있습니다.
+    </div>
 
     {% if error %}
         <div class="error">{{ error }}</div>
@@ -84,11 +93,13 @@ def index():
     start_date = request.args.get('start_date', '')
     end_date = request.args.get('end_date', '')
     alc = request.args.get('alc', '').upper()
+    part_name = request.args.get('part_name', '').upper()
 
-    # 입력값 검증
     if request.args:
-        if not (start_date and end_date and alc):
-            error = "⚠️ 시작 날짜, 종료 날짜, ALC 코드를 모두 입력해야 합니다."
+        if not (start_date and end_date):
+            error = "⚠️ 시작 날짜와 종료 날짜는 필수입니다."
+        elif not (part_name or alc):
+            error = "⚠️ 부품명 또는 ALC 코드를 입력해주세요."
         else:
             try:
                 conn = sqlite3.connect(DB_PATH)
@@ -101,12 +112,20 @@ def index():
                         COUNT(*) AS 생산수량
                     FROM 생산량
                     WHERE 
-                        UPPER(ALC) LIKE ?
-                        AND [part order done date] BETWEEN ? AND ?
-                    GROUP BY 날짜, ALC, 부품명, 부품번호
-                    ORDER BY 날짜, 부품명
+                        [part order done date] BETWEEN ? AND ?
                 """
-                df = pd.read_sql_query(query, conn, params=[f"%{alc}%", start_date, end_date])
+                params = [start_date, end_date]
+
+                if alc:
+                    query += " AND UPPER(ALC) LIKE ?"
+                    params.append(f"%{alc}%")
+                if part_name:
+                    query += " AND UPPER(부품명) LIKE ?"
+                    params.append(f"%{part_name}%")
+
+                query += " GROUP BY 날짜, ALC, 부품명, 부품번호 ORDER BY 날짜, 부품명"
+
+                df = pd.read_sql_query(query, conn, params=params)
                 conn.close()
                 data = df
             except Exception as e:
