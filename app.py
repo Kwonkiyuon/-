@@ -32,7 +32,7 @@ HTML_TEMPLATE = """
         input[type="date"], input[type="text"] { padding: 5px; margin-right: 10px; }
         button { padding: 5px 10px; }
         .error { color: red; margin-top: 20px; font-weight: bold; }
-        .notice { margin-top: 20px; color: #555; font-size: 14px; }
+        .notice { margin-top: 20px; color: red; font-size: 18px; font-weight: bold; }
     </style>
 </head>
 <body>
