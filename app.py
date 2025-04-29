@@ -32,7 +32,7 @@ HTML_TEMPLATE = """
         input[type="date"], input[type="text"] { padding: 5px; margin-right: 10px; }
         button { padding: 5px 10px; }
         .error { color: red; margin-top: 20px; font-weight: bold; }
-        .notice { margin-top: 20px; color: red; font-size: 18px; font-weight: bold; }
+        .notice { margin-top: 20px; color: red; font-size: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -44,6 +44,7 @@ HTML_TEMPLATE = """
     <form method="get">
         시작 날짜: <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
         종료 날짜: <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}">
+        차종 키워드: <input type="text" name="model" value="{{ request.args.get('model', '') }}">
         부품명 키워드: <input type="text" name="part_name" value="{{ request.args.get('part_name', '') }}">
         ALC 코드: <input type="text" name="alc" value="{{ request.args.get('alc', '') }}">
         <button type="submit">조회</button>
@@ -51,7 +52,7 @@ HTML_TEMPLATE = """
 
     <div class="notice">
         시작 날짜와 종료 날짜는 필수!<br>
-        부품명 또는 ALC 코드를 입력해주세요.<br>
+        부품명, ALC 코드 또는 차종을 입력해주세요.<br>
         부품명 입력 시 부품의 전체 ALC코드와 생산량을 볼 수 있고,<br>
         ALC 코드를 입력 시 단일 부품만 알 수 있습니다.
     </div>
@@ -94,18 +95,20 @@ def index():
     end_date = request.args.get('end_date', '')
     alc = request.args.get('alc', '').upper()
     part_name = request.args.get('part_name', '').upper()
+    model = request.args.get('model', '').upper()
 
     if request.args:
         if not (start_date and end_date):
             error = "⚠️ 시작 날짜와 종료 날짜는 필수입니다."
-        elif not (part_name or alc):
-            error = "⚠️ 부품명 또는 ALC 코드를 입력해주세요."
+        elif not (part_name or alc or model):
+            error = "⚠️ 부품명, ALC 코드 또는 차종을 입력해주세요."
         else:
             try:
                 conn = sqlite3.connect(DB_PATH)
                 query = """
                     SELECT 
                         [part order done date] AS 날짜,
+                        차종,
                         UPPER(ALC) AS ALC,
                         UPPER(부품명) AS 부품명,
                         UPPER([부품 번호]) AS 부품번호,
@@ -116,6 +119,9 @@ def index():
                 """
                 params = [start_date, end_date]
 
+                if model:
+                    query += " AND UPPER(차종) LIKE ?"
+                    params.append(f"%{model}%")
                 if alc:
                     query += " AND UPPER(ALC) LIKE ?"
                     params.append(f"%{alc}%")
@@ -123,7 +129,7 @@ def index():
                     query += " AND UPPER(부품명) LIKE ?"
                     params.append(f"%{part_name}%")
 
-                query += " GROUP BY 날짜, ALC, 부품명, 부품번호 ORDER BY 날짜, 부품명"
+                query += " GROUP BY 날짜, 차종, ALC, 부품명, 부품번호 ORDER BY 날짜, 부품명"
 
                 df = pd.read_sql_query(query, conn, params=params)
                 conn.close()
