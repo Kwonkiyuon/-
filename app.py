@@ -19,9 +19,10 @@ if not os.path.exists(DB_PATH):
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="ko">
+<html lang=\"ko\">
 <head>
-    <meta charset="UTF-8">
+    <meta charset=\"UTF-8\">
+    <meta http-equiv=\"refresh\" content=\"300\"> <!-- 5분마다 새로고침 -->
     <title>다차종 일일 생산량 조회</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
@@ -29,28 +30,28 @@ HTML_TEMPLATE = """
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         th { background-color: #f2f2f2; }
-        input[type="date"], input[type="text"] { padding: 5px; margin-right: 10px; }
+        input[type=\"date\"], input[type=\"text\"] { padding: 5px; margin-right: 10px; }
         button { padding: 5px 10px; }
         .error { color: red; margin-top: 20px; font-weight: bold; }
         .notice { margin-top: 20px; color: red; font-size: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="top-right">
-        <img src="/static/현대인 마크.png" alt="현대인 로고" style="height: 90px;">
+    <div class=\"top-right\">
+        <img src=\"/static/현대인 마크.png\" alt=\"현대인 로고\" style=\"height: 90px;\">
     </div>
 
     <h1>다차종 일일 생산량 조회</h1>
-    <form method="get">
-        시작 날짜: <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
-        종료 날짜: <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}">
-        차종 키워드: <input type="text" name="model" value="{{ request.args.get('model', '') }}">
-        부품명 키워드: <input type="text" name="part_name" value="{{ request.args.get('part_name', '') }}">
-        ALC 코드: <input type="text" name="alc" value="{{ request.args.get('alc', '') }}">
-        <button type="submit">조회</button>
+    <form method=\"get\">
+        시작 날짜: <input type=\"date\" name=\"start_date\" value=\"{{ request.args.get('start_date', '') }}\">
+        종료 날짜: <input type=\"date\" name=\"end_date\" value=\"{{ request.args.get('end_date', '') }}\">
+        차종 키워드: <input type=\"text\" name=\"model\" value=\"{{ request.args.get('model', '') }}\">
+        부품명 키워드: <input type=\"text\" name=\"part_name\" value=\"{{ request.args.get('part_name', '') }}\">
+        ALC 코드: <input type=\"text\" name=\"alc\" value=\"{{ request.args.get('alc', '') }}\">
+        <button type=\"submit\">조회</button>
     </form>
 
-    <div class="notice">
+    <div class=\"notice\">
         시작 날짜와 종료 날짜는 필수!<br>
         부품명, ALC 코드 또는 차종을 입력해주세요.<br>
         부품명 입력 시 부품의 전체 ALC코드와 생산량을 볼 수 있고,<br>
@@ -58,7 +59,7 @@ HTML_TEMPLATE = """
     </div>
 
     {% if error %}
-        <div class="error">{{ error }}</div>
+        <div class=\"error\">{{ error }}</div>
     {% endif %}
 
     {% if data is not none and not data.empty %}
