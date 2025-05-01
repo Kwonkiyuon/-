@@ -44,13 +44,19 @@ HTML_TEMPLATE = """
                 source: function(request, response) {
                     $.getJSON("/autocomplete_part_name", { term: request.term }, response);
                 },
-                minLength: 2
-            });
-            $("#alc").autocomplete({
-                source: function(request, response) {
-                    $.getJSON("/autocomplete_alc", { term: request.term }, response);
-                },
-                minLength: 1
+                minLength: 2,
+                select: function(event, ui) {
+                    $('#part_name').val(ui.item.value);
+                    $.getJSON("/related_alc", { part_name: ui.item.value }, function(data) {
+                        var alcSelect = $('#alc');
+                        alcSelect.empty();
+                        alcSelect.append($('<option>', { value: '', text: '선택 안함' }));
+                        $.each(data, function(i, item) {
+                            alcSelect.append($('<option>', { value: item, text: item }));
+                        });
+                    });
+                    return false;
+                }
             });
         });
     </script>
@@ -71,7 +77,12 @@ HTML_TEMPLATE = """
             {% endfor %}
         </select>
         부품명 : <input type=\"text\" id=\"part_name\" name=\"part_name\" value=\"{{ request.args.get('part_name', '') }}\">
-        ALC 코드: <input type=\"text\" id=\"alc\" name=\"alc\" value=\"{{ request.args.get('alc', '') }}\">
+        ALC 코드: <select id=\"alc\" name=\"alc\">
+            <option value=\"\">선택 안함</option>
+            {% for a in alcs %}
+                <option value=\"{{ a }}\" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
         <button type=\"submit\">조회</button>
     </form>
 
@@ -83,7 +94,7 @@ HTML_TEMPLATE = """
     </div>
 
     {% if error %}
-        <div class=\"error\">{{ error }}</div>
+        <div class=\"error">{{ error }}</div>
     {% endif %}
 
     {% if data is not none and not data.empty %}
@@ -122,11 +133,15 @@ def index():
     part_name = request.args.get('part_name', '').upper()
     model = request.args.get('model', '')
 
-    models = []
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+
     cur.execute("SELECT DISTINCT 차종 FROM 생산량 ORDER BY 차종")
     models = [row[0] for row in cur.fetchall() if row[0]]
+
+    cur.execute("SELECT DISTINCT UPPER(ALC) FROM 생산량 ORDER BY ALC")
+    alcs = [row[0] for row in cur.fetchall() if row[0]]
+
     conn.close()
 
     if request.args:
@@ -169,7 +184,7 @@ def index():
             except Exception as e:
                 error = f"DB 조회 오류: {str(e)}"
 
-    return render_template_string(HTML_TEMPLATE, data=data, request=request, error=error, models=models)
+    return render_template_string(HTML_TEMPLATE, data=data, request=request, error=error, models=models, alcs=alcs)
 
 @app.route('/autocomplete_part_name')
 def autocomplete_part_name():
@@ -181,12 +196,12 @@ def autocomplete_part_name():
     conn.close()
     return jsonify(results)
 
-@app.route('/autocomplete_alc')
-def autocomplete_alc():
-    term = request.args.get("term", "").upper()
+@app.route('/related_alc')
+def related_alc():
+    part_name = request.args.get("part_name", "").upper()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT DISTINCT ALC FROM 생산량 WHERE UPPER(ALC) LIKE ? LIMIT 10", (f"%{term}%",))
+    cur.execute("SELECT DISTINCT UPPER(ALC) FROM 생산량 WHERE UPPER(부품명) = ?", (part_name,))
     results = [row[0] for row in cur.fetchall()]
     conn.close()
     return jsonify(results)
