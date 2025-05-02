@@ -1,28 +1,32 @@
 from flask import Flask, render_template_string, request, jsonify
-import sqlite3
 import os
 import requests
+import zipfile
 import pandas as pd
 
 app = Flask(__name__)
 
-DB_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.db"
-DB_PATH = "/tmp/default.db"
+ZIP_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default_csv.zip"
+ZIP_PATH = "/tmp/default_csv.zip"
+CSV_PATH = "/tmp/default.csv"
 
-# DB 파일이 없으면 GitHub에서 다운로드
-if not os.path.exists(DB_PATH):
-    print("DB 파일이 없습니다. GitHub에서 다운로드 중...")
-    response = requests.get(DB_URL)
-    with open(DB_PATH, "wb") as f:
+# 압축파일이 없으면 다운로드 및 해제
+if not os.path.exists(CSV_PATH):
+    print("CSV ZIP 파일이 없습니다. GitHub에서 다운로드 중...")
+    response = requests.get(ZIP_URL)
+    with open(ZIP_PATH, "wb") as f:
         f.write(response.content)
-    print("DB 다운로드 완료!")
+    print("압축 파일 다운로드 완료! 압축 해제 중...")
+    with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
+        zip_ref.extractall("/tmp/")
+    print("압축 해제 완료!")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang=\"ko\">
 <head>
     <meta charset=\"UTF-8\">
-    <meta http-equiv=\"refresh\" content=\"300\"> <!-- 5분마다 새로고침 -->
+    <meta http-equiv=\"refresh\" content=\"300\">
     <title>다차종 일일 생산량 조회</title>
     <script src=\"https://code.jquery.com/jquery-3.6.0.min.js\"></script>
     <script src=\"https://code.jquery.com/ui/1.13.1/jquery-ui.min.js\"></script>
@@ -33,7 +37,7 @@ HTML_TEMPLATE = """
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         th { background-color: #f2f2f2; }
-        input[type=\"date\"], input[type=\"text\"], select { padding: 5px; margin-right: 10px; }
+        input[type=date], input[type=text], select { padding: 5px; margin-right: 10px; }
         button { padding: 5px 10px; }
         .error { color: red; margin-top: 20px; font-weight: bold; }
         .notice { margin-top: 20px; color: red; font-size: 20px; font-weight: bold; }
@@ -94,7 +98,7 @@ HTML_TEMPLATE = """
     </div>
 
     {% if error %}
-        <div class=\"error">{{ error }}</div>
+        <div class=\"error\">{{ error }}</div>
     {% endif %}
 
     {% if data is not none and not data.empty %}
@@ -133,16 +137,15 @@ def index():
     part_name = request.args.get('part_name', '').upper()
     model = request.args.get('model', '')
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df['part order done date'] = pd.to_datetime(df['part order done date'], errors='coerce')
+    df['ALC'] = df['ALC'].astype(str).str.upper()
+    df['부품명'] = df['부품명'].astype(str).str.upper()
+    df['차종'] = df['차종'].astype(str)
+    df['부품 번호'] = df['부품 번호'].astype(str).str.upper()
 
-    cur.execute("SELECT DISTINCT 차종 FROM 생산량 ORDER BY 차종")
-    models = [row[0] for row in cur.fetchall() if row[0]]
-
-    cur.execute("SELECT DISTINCT UPPER(ALC) FROM 생산량 ORDER BY ALC")
-    alcs = [row[0] for row in cur.fetchall() if row[0]]
-
-    conn.close()
+    models = sorted(df['차종'].dropna().unique())
+    alcs = sorted(df['ALC'].dropna().unique())
 
     if request.args:
         if not (start_date and end_date):
@@ -150,60 +153,36 @@ def index():
         elif not (part_name or alc or model):
             error = "⚠️ 부품명, ALC 코드 또는 차종을 입력해주세요."
         else:
-            try:
-                conn = sqlite3.connect(DB_PATH)
-                query = """
-                    SELECT 
-                        [part order done date] AS 날짜,
-                        차종,
-                        UPPER(ALC) AS ALC,
-                        UPPER(부품명) AS 부품명,
-                        UPPER([부품 번호]) AS 부품번호,
-                        COUNT(*) AS 생산수량
-                    FROM 생산량
-                    WHERE 
-                        [part order done date] BETWEEN ? AND ?
-                """
-                params = [start_date, end_date]
-
-                if model:
-                    query += " AND 차종 = ?"
-                    params.append(model)
-                if alc:
-                    query += " AND UPPER(ALC) LIKE ?"
-                    params.append(f"%{alc}%")
-                if part_name:
-                    query += " AND UPPER(부품명) LIKE ?"
-                    params.append(f"%{part_name}%")
-
-                query += " GROUP BY 날짜, 차종, ALC, 부품명, 부품번호 ORDER BY 날짜, 부품명"
-
-                df = pd.read_sql_query(query, conn, params=params)
-                conn.close()
-                data = df
-            except Exception as e:
-                error = f"DB 조회 오류: {str(e)}"
+            mask = (df['part order done date'] >= start_date) & (df['part order done date'] <= end_date)
+            if model:
+                mask &= df['차종'] == model
+            if alc:
+                mask &= df['ALC'].str.contains(alc)
+            if part_name:
+                mask &= df['부품명'].str.contains(part_name)
+            filtered = df[mask]
+            if not filtered.empty:
+                data = filtered.groupby(['part order done date', '차종', 'ALC', '부품명', '부품 번호']).size().reset_index(name='생산수량')
+            else:
+                data = pd.DataFrame()
 
     return render_template_string(HTML_TEMPLATE, data=data, request=request, error=error, models=models, alcs=alcs)
 
 @app.route('/autocomplete_part_name')
 def autocomplete_part_name():
     term = request.args.get("term", "").upper()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT DISTINCT 부품명 FROM 생산량 WHERE UPPER(부품명) LIKE ? LIMIT 10", (f"%{term}%",))
-    results = [row[0] for row in cur.fetchall()]
-    conn.close()
+    df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df['부품명'] = df['부품명'].astype(str).str.upper()
+    results = df[df['부품명'].str.contains(term, na=False)]['부품명'].dropna().unique().tolist()[:10]
     return jsonify(results)
 
 @app.route('/related_alc')
 def related_alc():
     part_name = request.args.get("part_name", "").upper()
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT DISTINCT UPPER(ALC) FROM 생산량 WHERE UPPER(부품명) = ?", (part_name,))
-    results = [row[0] for row in cur.fetchall()]
-    conn.close()
+    df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df['부품명'] = df['부품명'].astype(str).str.upper()
+    df['ALC'] = df['ALC'].astype(str).str.upper()
+    results = df[df['부품명'] == part_name]['ALC'].dropna().unique().tolist()
     return jsonify(results)
 
 if __name__ == '__main__':
