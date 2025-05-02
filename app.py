@@ -6,8 +6,8 @@ import pandas as pd
 
 app = Flask(__name__)
 
-ZIP_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default_csv.zip"
-ZIP_PATH = "/tmp/default_csv.zip"
+ZIP_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.zip"
+ZIP_PATH = "/tmp/default.zip"
 CSV_PATH = "/tmp/default.csv"
 
 # 압축파일이 없으면 다운로드 및 해제
@@ -93,7 +93,8 @@ HTML_TEMPLATE = """
     <div class=\"notice\">
         시작 날짜와 종료 날짜는 필수!<br>
         부품명, ALC 코드 또는 차종을 입력해주세요.<br>
-        매일 오전 9시에 전날 총 생산량을 업데이트합니다. 참고바랍니다.
+        부품명 입력 시 부품의 전체 ALC코드와 생산량을 볼 수 있고,<br>
+        ALC 코드를 입력 시 단일 부품만 알 수 있습니다.
     </div>
 
     {% if error %}
