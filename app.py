@@ -1,16 +1,20 @@
-from flask import Flask, render_template_string, request, jsonify
 import os
+import requests
 import pandas as pd
-import requests  # ← 이 부분 추가
+from flask import Flask, render_template_string, request, jsonify
 
-# GitHub Release에서 default.csv 다운로드
-CSV_URL = "https://github.com/Kwonkiyuon/통합생산량/releases/download/v1.1/default.csv"
+# Flask 앱 생성
+app = Flask(__name__)
+
+# CSV 파일 경로 및 자동 다운로드
+CSV_URL = "https://github.com/사용자명/레포명/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
 if not os.path.exists(CSV_PATH):
     r = requests.get(CSV_URL)
     with open(CSV_PATH, 'wb') as f:
         f.write(r.content)
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang=\"ko\">
@@ -59,13 +63,6 @@ HTML_TEMPLATE = """
                 },
                 minLength: 1
             });
-
-            $("#alc").autocomplete({
-                source: function(request, response) {
-                    $.getJSON("/autocomplete_alc", { term: request.term }, response);
-                },
-                minLength: 1
-            });
         });
     </script>
 </head>
@@ -80,7 +77,12 @@ HTML_TEMPLATE = """
         종료 날짜: <input type=\"date\" name=\"end_date\" value=\"{{ request.args.get('end_date', '') }}\">
         차종: <input type=\"text\" id=\"model\" name=\"model\" value=\"{{ request.args.get('model', '') }}\">
         부품명 : <input type=\"text\" id=\"part_name\" name=\"part_name\" value=\"{{ request.args.get('part_name', '') }}\">
-        ALC 코드: <input type=\"text\" id=\"alc\" name=\"alc\" value=\"{{ request.args.get('alc', '') }}\">
+        ALC 코드: <select id=\"alc\" name=\"alc\">
+            <option value=\"\">선택 안함</option>
+            {% for a in alcs %}
+                <option value=\"{{ a }}\" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
         <button type=\"submit\">조회</button>
     </form>
 
@@ -176,14 +178,6 @@ def autocomplete_model():
     df = pd.read_csv(CSV_PATH, encoding='cp949')
     df['차종'] = df['차종'].astype(str).str.upper()
     results = df[df['차종'].str.contains(term, na=False)]['차종'].dropna().unique().tolist()[:10]
-    return jsonify(results)
-
-@app.route('/autocomplete_alc')
-def autocomplete_alc():
-    term = request.args.get("term", "").upper()
-    df = pd.read_csv(CSV_PATH, encoding='cp949')
-    df['ALC'] = df['ALC'].astype(str).str.upper()
-    results = df[df['ALC'].str.contains(term, na=False)]['ALC'].dropna().unique().tolist()[:10]
     return jsonify(results)
 
 @app.route('/related_alc')
