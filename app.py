@@ -7,7 +7,7 @@ from flask import Flask, render_template_string, request, jsonify
 app = Flask(__name__)
 
 # CSV 파일 경로 및 자동 다운로드
-CSV_URL = "https://github.com/사용자명/레포명/releases/download/v1.1/default.csv"
+CSV_URL = "https://github.com/Kwonkiyuon/통합생산/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
 if not os.path.exists(CSV_PATH):
