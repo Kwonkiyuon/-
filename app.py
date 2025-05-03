@@ -1,11 +1,16 @@
 from flask import Flask, render_template_string, request, jsonify
 import os
 import pandas as pd
+import requests  # ← 이 부분 추가
 
-app = Flask(__name__)
-
+# GitHub Release에서 default.csv 다운로드
+CSV_URL = "https://github.com/kwonkiyuon/통합생산량/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
+if not os.path.exists(CSV_PATH):
+    r = requests.get(CSV_URL)
+    with open(CSV_PATH, 'wb') as f:
+        f.write(r.content)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang=\"ko\">
