@@ -135,7 +135,7 @@ def index():
     model = request.args.get('model', '').upper()
 
     df = pd.read_csv(CSV_PATH, encoding='cp949')
-    df.columns = df.columns.str.strip('"')  # 열 이름의 쌍따옴표 제거
+    df.columns = df.columns.str.strip().str.replace('"', '')
     df['part order done date'] = pd.to_datetime(df['part order done date'], errors='coerce')
     df['ALC'] = df['ALC'].astype(str).str.upper()
     df['부품명'] = df['부품명'].astype(str).str.upper()
