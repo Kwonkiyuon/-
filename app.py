@@ -4,7 +4,7 @@ import pandas as pd
 import requests  # ← 이 부분 추가
 
 # GitHub Release에서 default.csv 다운로드
-CSV_URL = "https://github.com/kwonkiyuon/통합생산량/releases/download/v1.1/default.csv"
+CSV_URL = "https://github.com/Kwonkiyuon/통합생산량/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
 if not os.path.exists(CSV_PATH):
