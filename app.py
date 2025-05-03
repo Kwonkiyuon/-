@@ -1,25 +1,10 @@
 from flask import Flask, render_template_string, request, jsonify
 import os
-import requests
-import zipfile
 import pandas as pd
 
 app = Flask(__name__)
 
-ZIP_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.zip"
-ZIP_PATH = "/tmp/default.zip"
 CSV_PATH = "/tmp/default.csv"
-
-# 압축파일이 없으면 다운로드 및 해제
-if not os.path.exists(CSV_PATH):
-    print("CSV ZIP 파일이 없습니다. GitHub에서 다운로드 중...")
-    response = requests.get(ZIP_URL)
-    with open(ZIP_PATH, "wb") as f:
-        f.write(response.content)
-    print("압축 파일 다운로드 완료! 압축 해제 중...")
-    with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
-        zip_ref.extractall("/tmp/")
-    print("압축 해제 완료!")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -48,7 +33,7 @@ HTML_TEMPLATE = """
                 source: function(request, response) {
                     $.getJSON("/autocomplete_part_name", { term: request.term }, response);
                 },
-                minLength: 2,
+                minLength: 1,
                 select: function(event, ui) {
                     $('#part_name').val(ui.item.value);
                     $.getJSON("/related_alc", { part_name: ui.item.value }, function(data) {
@@ -62,6 +47,20 @@ HTML_TEMPLATE = """
                     return false;
                 }
             });
+
+            $("#model").autocomplete({
+                source: function(request, response) {
+                    $.getJSON("/autocomplete_model", { term: request.term }, response);
+                },
+                minLength: 1
+            });
+
+            $("#alc").autocomplete({
+                source: function(request, response) {
+                    $.getJSON("/autocomplete_alc", { term: request.term }, response);
+                },
+                minLength: 1
+            });
         });
     </script>
 </head>
@@ -74,19 +73,9 @@ HTML_TEMPLATE = """
     <form method=\"get\">
         시작 날짜: <input type=\"date\" name=\"start_date\" value=\"{{ request.args.get('start_date', '') }}\">
         종료 날짜: <input type=\"date\" name=\"end_date\" value=\"{{ request.args.get('end_date', '') }}\">
-        차종: <select name=\"model\">
-            <option value=\"\">선택 안함</option>
-            {% for m in models %}
-                <option value=\"{{ m }}\" {% if m == request.args.get('model', '') %}selected{% endif %}>{{ m }}</option>
-            {% endfor %}
-        </select>
+        차종: <input type=\"text\" id=\"model\" name=\"model\" value=\"{{ request.args.get('model', '') }}\">
         부품명 : <input type=\"text\" id=\"part_name\" name=\"part_name\" value=\"{{ request.args.get('part_name', '') }}\">
-        ALC 코드: <select id=\"alc\" name=\"alc\">
-            <option value=\"\">선택 안함</option>
-            {% for a in alcs %}
-                <option value=\"{{ a }}\" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
-            {% endfor %}
-        </select>
+        ALC 코드: <input type=\"text\" id=\"alc\" name=\"alc\" value=\"{{ request.args.get('alc', '') }}\">
         <button type=\"submit\">조회</button>
     </form>
 
@@ -94,7 +83,8 @@ HTML_TEMPLATE = """
         시작 날짜와 종료 날짜는 필수!<br>
         부품명, ALC 코드 또는 차종을 입력해주세요.<br>
         부품명 입력 시 부품의 전체 ALC코드와 생산량을 볼 수 있고,<br>
-        ALC 코드를 입력 시 단일 부품만 알 수 있습니다.
+        ALC 코드를 입력 시 단일 부품만 알 수 있습니다.<br>
+        매일 오전 9시에 전날 생산량을 업데이트합니다. 참고바랍니다.
     </div>
 
     {% if error %}
@@ -135,16 +125,15 @@ def index():
     end_date = request.args.get('end_date', '')
     alc = request.args.get('alc', '').upper()
     part_name = request.args.get('part_name', '').upper()
-    model = request.args.get('model', '')
+    model = request.args.get('model', '').upper()
 
     df = pd.read_csv(CSV_PATH, encoding='cp949')
     df['part order done date'] = pd.to_datetime(df['part order done date'], errors='coerce')
     df['ALC'] = df['ALC'].astype(str).str.upper()
     df['부품명'] = df['부품명'].astype(str).str.upper()
-    df['차종'] = df['차종'].astype(str)
+    df['차종'] = df['차종'].astype(str).str.upper()
     df['부품 번호'] = df['부품 번호'].astype(str).str.upper()
 
-    models = sorted(df['차종'].dropna().unique())
     alcs = sorted(df['ALC'].dropna().unique())
 
     if request.args:
@@ -155,18 +144,18 @@ def index():
         else:
             mask = (df['part order done date'] >= start_date) & (df['part order done date'] <= end_date)
             if model:
-                mask &= df['차종'] == model
-            if alc:
-                mask &= df['ALC'].str.contains(alc)
+                mask &= df['차종'].str.contains(model)
             if part_name:
                 mask &= df['부품명'].str.contains(part_name)
+            if alc:
+                mask &= df['ALC'].str.contains(alc)
             filtered = df[mask]
             if not filtered.empty:
                 data = filtered.groupby(['part order done date', '차종', 'ALC', '부품명', '부품 번호']).size().reset_index(name='생산수량')
             else:
                 data = pd.DataFrame()
 
-    return render_template_string(HTML_TEMPLATE, data=data, request=request, error=error, models=models, alcs=alcs)
+    return render_template_string(HTML_TEMPLATE, data=data, request=request, error=error, alcs=alcs)
 
 @app.route('/autocomplete_part_name')
 def autocomplete_part_name():
@@ -174,6 +163,22 @@ def autocomplete_part_name():
     df = pd.read_csv(CSV_PATH, encoding='cp949')
     df['부품명'] = df['부품명'].astype(str).str.upper()
     results = df[df['부품명'].str.contains(term, na=False)]['부품명'].dropna().unique().tolist()[:10]
+    return jsonify(results)
+
+@app.route('/autocomplete_model')
+def autocomplete_model():
+    term = request.args.get("term", "").upper()
+    df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df['차종'] = df['차종'].astype(str).str.upper()
+    results = df[df['차종'].str.contains(term, na=False)]['차종'].dropna().unique().tolist()[:10]
+    return jsonify(results)
+
+@app.route('/autocomplete_alc')
+def autocomplete_alc():
+    term = request.args.get("term", "").upper()
+    df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df['ALC'] = df['ALC'].astype(str).str.upper()
+    results = df[df['ALC'].str.contains(term, na=False)]['ALC'].dropna().unique().tolist()[:10]
     return jsonify(results)
 
 @app.route('/related_alc')
