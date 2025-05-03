@@ -7,7 +7,7 @@ from flask import Flask, render_template_string, request, jsonify
 app = Flask(__name__)
 
 # CSV 파일 경로 및 자동 다운로드
-CSV_URL = "https://github.com/Kwonkiyuon/통합생산/releases/download/v1.1/default.csv"
+CSV_URL = "https://github.com/Kwonkiyuon/통합생산량/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
 if not os.path.exists(CSV_PATH):
@@ -135,6 +135,7 @@ def index():
     model = request.args.get('model', '').upper()
 
     df = pd.read_csv(CSV_PATH, encoding='cp949')
+    df.columns = df.columns.str.strip('"')  # 열 이름의 쌍따옴표 제거
     df['part order done date'] = pd.to_datetime(df['part order done date'], errors='coerce')
     df['ALC'] = df['ALC'].astype(str).str.upper()
     df['부품명'] = df['부품명'].astype(str).str.upper()
