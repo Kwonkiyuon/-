@@ -58,24 +58,24 @@ HTML_TEMPLATE = """
                 });
             }
 
-            $("#part_name").autocomplete({
-                source: function(request, response) {
-                    $.getJSON("/autocomplete_part_name", { term: request.term }, response);
-                },
-                minLength: 1,
-                select: function(event, ui) {
-                    $('#part_name').val(ui.item.value);
-                    updateALC(ui.item.value);
-                    return false;
-                }
-            });
+            function autocompleteInput(id, route) {
+                $('#' + id).autocomplete({
+                    source: function(request, response) {
+                        $.getJSON(route, { term: request.term }, response);
+                    },
+                    minLength: 1,
+                    select: function(event, ui) {
+                        $('#' + id).val(ui.item.value);
+                        if (id === 'part_name') {
+                            updateALC(ui.item.value);
+                        }
+                        return false;
+                    }
+                });
+            }
 
-            $("#model").autocomplete({
-                source: function(request, response) {
-                    $.getJSON("/autocomplete_model", { term: request.term }, response);
-                },
-                minLength: 1
-            });
+            autocompleteInput("part_name", "/autocomplete_part_name");
+            autocompleteInput("model", "/autocomplete_model");
         });
     </script>
 </head>
