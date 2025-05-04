@@ -185,7 +185,7 @@ def autocomplete_model():
 def related_alc():
     part_name = request.args.get("part_name", "").upper()
     df = DF_ORIGINAL.copy()
-    results = df[df['부품명'] == part_name]['ALC'].dropna().unique().tolist()
+    results = df[df['부품명'].str.contains(part_name, na=False)]['ALC'].dropna().unique().tolist()
     return jsonify(results)
 
 if __name__ == '__main__':
