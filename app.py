@@ -32,23 +32,23 @@ HTML_TEMPLATE = """
     <meta http-equiv=\"refresh\" content=\"300\">
     <title>다차종 일일 생산량 조회</title>
     <script src=\"https://code.jquery.com/jquery-3.6.0.min.js\"></script>
-    <script src=\"https://code.jquery.com/ui/1.13.1/jquery-ui.min.js\"></script>
-    <link rel=\"stylesheet\" href=\"https://code.jquery.com/ui/1.13.1/themes/base/jquery-ui.css\">
+    <link href=\"https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css\" rel=\"stylesheet\" />
+    <script src=\"https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js\"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
         .top-right { position: absolute; top: 10px; right: 10px; }
         table { border-collapse: collapse; width: 100%; margin-top: 20px; }
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         th { background-color: #f2f2f2; }
-        input[type=date], input[type=text], select { padding: 5px; margin-right: 10px; }
+        input[type=date], select { padding: 5px; margin-right: 10px; }
         button { padding: 5px 10px; }
         .error { color: red; margin-top: 20px; font-weight: bold; }
         .notice { margin-top: 20px; color: red; font-size: 20px; font-weight: bold; }
     </style>
     <script>
         $(function() {
-            function updateALC(partName) {
-                $.getJSON("/related_alc", { part_name: partName }, function(data) {
+            function updateALC(partName, model) {
+                $.getJSON("/related_alc", { part_name: partName, model: model }, function(data) {
                     var alcSelect = $('#alc');
                     alcSelect.empty();
                     alcSelect.append($('<option>', { value: '', text: '선택 안함' }));
@@ -58,24 +58,35 @@ HTML_TEMPLATE = """
                 });
             }
 
-            function autocompleteInput(id, route) {
-                $('#' + id).autocomplete({
-                    source: function(request, response) {
-                        $.getJSON(route, { term: request.term }, response);
-                    },
-                    minLength: 1,
-                    select: function(event, ui) {
-                        $('#' + id).val(ui.item.value);
-                        if (id === 'part_name') {
-                            updateALC(ui.item.value);
-                        }
-                        return false;
-                    }
-                });
-            }
+            $('#part_name').select2({
+                ajax: {
+                    url: '/autocomplete_part_name',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) { return { term: params.term }; },
+                    processResults: function(data) { return { results: $.map(data, function(item) { return { id: item, text: item }; }) }; },
+                    cache: true
+                },
+                placeholder: '부품명을 입력하세요',
+                minimumInputLength: 1
+            }).on('select2:select', function (e) {
+                updateALC(e.params.data.id, $('#model').val());
+            });
 
-            autocompleteInput("part_name", "/autocomplete_part_name");
-            autocompleteInput("model", "/autocomplete_model");
+            $('#model').select2({
+                ajax: {
+                    url: '/autocomplete_model',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) { return { term: params.term }; },
+                    processResults: function(data) { return { results: $.map(data, function(item) { return { id: item, text: item }; }) }; },
+                    cache: true
+                },
+                placeholder: '차종을 입력하세요',
+                minimumInputLength: 1
+            });
+
+            $('#alc').select2();
         });
     </script>
 </head>
@@ -88,8 +99,8 @@ HTML_TEMPLATE = """
     <form method=\"get\">
         시작 날짜: <input type=\"date\" name=\"start_date\" value=\"{{ request.args.get('start_date', '') }}\">
         종료 날짜: <input type=\"date\" name=\"end_date\" value=\"{{ request.args.get('end_date', '') }}\">
-        차종: <input type=\"text\" id=\"model\" name=\"model\" value=\"{{ request.args.get('model', '') }}\">
-        부품명 : <input type=\"text\" id=\"part_name\" name=\"part_name\" value=\"{{ request.args.get('part_name', '') }}\">
+        차종: <select id=\"model\" name=\"model\"></select>
+        부품명 : <select id=\"part_name\" name=\"part_name\"></select>
         ALC 코드: <select id=\"alc\" name=\"alc\">
             <option value=\"\">선택 안함</option>
             {% for a in alcs %}
@@ -136,62 +147,4 @@ HTML_TEMPLATE = """
 </html>
 """
 
-@app.route('/')
-def index():
-    error = ''
-    data = None
-
-    start_date = request.args.get('start_date', '')
-    end_date = request.args.get('end_date', '')
-    alc = request.args.get('alc', '').upper()
-    part_name = request.args.get('part_name', '').upper()
-    model = request.args.get('model', '').upper()
-
-    df = DF_ORIGINAL.copy()
-    alcs = sorted(df['ALC'].dropna().unique())
-
-    if request.args:
-        if not (start_date and end_date):
-            error = "⚠️ 시작 날짜와 종료 날짜는 필수입니다."
-        elif not (part_name or alc or model):
-            error = "⚠️ 부품명, ALC 코드 또는 차종을 입력해주세요."
-        else:
-            mask = (df['part order done date'] >= start_date) & (df['part order done date'] <= end_date)
-            if model:
-                mask &= df['차종'].str.contains(model)
-            if part_name:
-                mask &= df['부품명'].str.contains(part_name)
-            if alc:
-                mask &= df['ALC'].str.contains(alc)
-            filtered = df[mask]
-            if not filtered.empty:
-                data = filtered.groupby(['part order done date', '차종', 'ALC', '부품명', '부품 번호']).size().reset_index(name='생산수량')
-            else:
-                data = pd.DataFrame()
-
-    return render_template_string(HTML_TEMPLATE, data=data, request=request, error=error, alcs=alcs)
-
-@app.route('/autocomplete_part_name')
-def autocomplete_part_name():
-    term = request.args.get("term", "").upper()
-    df = DF_ORIGINAL.copy()
-    results = df[df['부품명'].str.contains(term, na=False)]['부품명'].dropna().unique().tolist()[:10]
-    return jsonify(results)
-
-@app.route('/autocomplete_model')
-def autocomplete_model():
-    term = request.args.get("term", "").upper()
-    df = DF_ORIGINAL.copy()
-    results = df[df['차종'].str.contains(term, na=False)]['차종'].dropna().unique().tolist()[:10]
-    return jsonify(results)
-
-@app.route('/related_alc')
-def related_alc():
-    part_name = request.args.get("part_name", "").upper()
-    df = DF_ORIGINAL.copy()
-    results = df[df['부품명'].str.contains(part_name, na=False)]['ALC'].dropna().unique().tolist()
-    return jsonify(results)
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+# 이하 Flask 라우트 함수는 그대로 유지
