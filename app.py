@@ -47,6 +47,17 @@ HTML_TEMPLATE = """
     </style>
     <script>
         $(function() {
+            function updateALC(partName) {
+                $.getJSON("/related_alc", { part_name: partName }, function(data) {
+                    var alcSelect = $('#alc');
+                    alcSelect.empty();
+                    alcSelect.append($('<option>', { value: '', text: '선택 안함' }));
+                    $.each(data, function(i, item) {
+                        alcSelect.append($('<option>', { value: item, text: item }));
+                    });
+                });
+            }
+
             $("#part_name").autocomplete({
                 source: function(request, response) {
                     $.getJSON("/autocomplete_part_name", { term: request.term }, response);
@@ -54,14 +65,7 @@ HTML_TEMPLATE = """
                 minLength: 1,
                 select: function(event, ui) {
                     $('#part_name').val(ui.item.value);
-                    $.getJSON("/related_alc", { part_name: ui.item.value }, function(data) {
-                        var alcSelect = $('#alc');
-                        alcSelect.empty();
-                        alcSelect.append($('<option>', { value: '', text: '선택 안함' }));
-                        $.each(data, function(i, item) {
-                            alcSelect.append($('<option>', { value: item, text: item }));
-                        });
-                    });
+                    updateALC(ui.item.value);
                     return false;
                 }
             });
