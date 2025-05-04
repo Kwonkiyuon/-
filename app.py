@@ -7,13 +7,22 @@ from flask import Flask, render_template_string, request, jsonify
 app = Flask(__name__)
 
 # CSV 파일 경로 및 자동 다운로드
-CSV_URL = "https://github.com/Kwonkiyuon/-/releases/download/v1.1/default.csv"
+CSV_URL = "https://github.com/kwonkiyuon/-/releases/download/v1.1/default.csv"
 CSV_PATH = "/tmp/default.csv"
 
 if not os.path.exists(CSV_PATH):
     r = requests.get(CSV_URL)
     with open(CSV_PATH, 'wb') as f:
         f.write(r.content)
+
+# 메모리 최적화를 위해 앱 시작 시 CSV를 한 번만 불러오기
+DF_ORIGINAL = pd.read_csv(CSV_PATH, encoding='cp949')
+DF_ORIGINAL.columns = DF_ORIGINAL.columns.str.strip().str.replace('"', '')
+DF_ORIGINAL['part order done date'] = pd.to_datetime(DF_ORIGINAL['part order done date'], errors='coerce')
+DF_ORIGINAL['ALC'] = DF_ORIGINAL['ALC'].astype(str).str.upper()
+DF_ORIGINAL['부품명'] = DF_ORIGINAL['부품명'].astype(str).str.upper()
+DF_ORIGINAL['차종'] = DF_ORIGINAL['차종'].astype(str).str.upper()
+DF_ORIGINAL['부품 번호'] = DF_ORIGINAL['부품 번호'].astype(str).str.upper()
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -134,14 +143,7 @@ def index():
     part_name = request.args.get('part_name', '').upper()
     model = request.args.get('model', '').upper()
 
-    df = pd.read_csv(CSV_PATH, encoding='cp949')
-    df.columns = df.columns.str.strip().str.replace('"', '')
-    df['part order done date'] = pd.to_datetime(df['part order done date'], errors='coerce')
-    df['ALC'] = df['ALC'].astype(str).str.upper()
-    df['부품명'] = df['부품명'].astype(str).str.upper()
-    df['차종'] = df['차종'].astype(str).str.upper()
-    df['부품 번호'] = df['부품 번호'].astype(str).str.upper()
-
+    df = DF_ORIGINAL.copy()
     alcs = sorted(df['ALC'].dropna().unique())
 
     if request.args:
@@ -168,25 +170,21 @@ def index():
 @app.route('/autocomplete_part_name')
 def autocomplete_part_name():
     term = request.args.get("term", "").upper()
-    df = pd.read_csv(CSV_PATH, encoding='cp949')
-    df['부품명'] = df['부품명'].astype(str).str.upper()
+    df = DF_ORIGINAL.copy()
     results = df[df['부품명'].str.contains(term, na=False)]['부품명'].dropna().unique().tolist()[:10]
     return jsonify(results)
 
 @app.route('/autocomplete_model')
 def autocomplete_model():
     term = request.args.get("term", "").upper()
-    df = pd.read_csv(CSV_PATH, encoding='cp949')
-    df['차종'] = df['차종'].astype(str).str.upper()
+    df = DF_ORIGINAL.copy()
     results = df[df['차종'].str.contains(term, na=False)]['차종'].dropna().unique().tolist()[:10]
     return jsonify(results)
 
 @app.route('/related_alc')
 def related_alc():
     part_name = request.args.get("part_name", "").upper()
-    df = pd.read_csv(CSV_PATH, encoding='cp949')
-    df['부품명'] = df['부품명'].astype(str).str.upper()
-    df['ALC'] = df['ALC'].astype(str).str.upper()
+    df = DF_ORIGINAL.copy()
     results = df[df['부품명'] == part_name]['ALC'].dropna().unique().tolist()
     return jsonify(results)
 
