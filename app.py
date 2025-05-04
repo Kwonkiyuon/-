@@ -24,6 +24,89 @@ DF_ORIGINAL['부품명'] = DF_ORIGINAL['부품명'].astype(str).str.upper()
 DF_ORIGINAL['차종'] = DF_ORIGINAL['차종'].astype(str).str.upper()
 DF_ORIGINAL['부품 번호'] = DF_ORIGINAL['부품 번호'].astype(str).str.upper()
 
+# HTML 템플릿 정의
+HTML_TEMPLATE = """
+<!doctype html>
+<html>
+<head>
+    <title>다차종 일일 생산량 조회</title>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+</head>
+<body>
+    <h2>다차종 일일 생산량 조회</h2>
+    <form method="get">
+        시작 날짜: <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
+        종료 날짜: <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}">
+        차종: <select id="model" name="model" style="width:200px"></select>
+        부품명: <select id="part_name" name="part_name" style="width:300px"></select>
+        ALC 코드: <select id="alc" name="alc">
+            <option value="">선택 안함</option>
+            {% for a in alcs %}
+                <option value="{{ a }}" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">조회</button>
+    </form>
+
+    {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+    {% if data is not none %}
+        <table border="1">
+            <thead><tr>{% for col in data.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+            <tbody>
+            {% for row in data.itertuples() %}
+                <tr>{% for value in row[1:] %}<td>{{ value }}</td>{% endfor %}</tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    <script>
+        function initSelect2(id, url, defaultValue) {
+            $(id).select2({
+                ajax: {
+                    url: url,
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return { term: params.term };
+                    },
+                    processResults: function (data) {
+                        return { results: data.map(d => ({ id: d, text: d })) };
+                    }
+                },
+                placeholder: '검색 또는 선택...',
+                allowClear: true
+            });
+            if (defaultValue) {
+                var option = new Option(defaultValue, defaultValue, true, true);
+                $(id).append(option).trigger('change');
+            }
+        }
+
+        $(document).ready(function () {
+            initSelect2('#part_name', '/autocomplete_part_name', '{{ request.args.get('part_name', '') }}');
+            initSelect2('#model', '/autocomplete_model', '{{ request.args.get('model', '') }}');
+
+            $('#part_name, #model').on('change', function () {
+                var part = $('#part_name').val();
+                var model = $('#model').val();
+                if (part && model) {
+                    $.getJSON('/related_alc', { part_name: part, model: model }, function (data) {
+                        $('#alc').empty().append('<option value="">선택 안함</option>');
+                        data.forEach(function (item) {
+                            $('#alc').append('<option value="' + item + '">' + item + '</option>');
+                        });
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+"""
+
 # index 라우트
 @app.route("/")
 def index():
