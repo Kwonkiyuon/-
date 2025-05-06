@@ -24,72 +24,57 @@ DF_ORIGINAL['부품명'] = DF_ORIGINAL['부품명'].astype(str).str.upper()
 DF_ORIGINAL['차종'] = DF_ORIGINAL['차종'].astype(str).str.upper()
 DF_ORIGINAL['부품 번호'] = DF_ORIGINAL['부품 번호'].astype(str).str.upper()
 
-# HTML 템플릿 정의
-HTML_TEMPLATE = """
+HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
     <title>다차종 일일 생산량 조회</title>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        label { display: inline-block; width: 80px; margin-top: 10px; }
+        input, select { margin-top: 10px; margin-bottom: 10px; }
+        .error { color: red; font-weight: bold; }
+        #logo {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: auto;
+            height: 120px;
+        }
+    </style>
 </head>
 <body>
     <h2>다차종 일일 생산량 조회</h2>
-    <img src="/static/현대인 마크.png" alt="현대인 로고" style="float:right; height:50px;">
-
+    <img id="logo" src="{{ url_for('static', filename='현대인 마크.png') }}" alt="현대인 로고">
     <form method="get">
-        시작 날짜: <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
-        종료 날짜: <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}">
-
-        차종:
-        <select id="model" name="model" style="width:200px">
-            <option value="">선택 안함</option>
-        </select>
-
-        부품명:
-        <select id="part_name" name="part_name" style="width:300px">
-            <option value="">선택 안함</option>
-        </select>
-
-        ALC 코드:
-        <select id="alc" name="alc">
+        <label>시작 날짜:</label> <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
+        <label>종료 날짜:</label> <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}"><br>
+        <label>차종:</label> <select id="model" name="model" style="width:200px;"></select>
+        <label>부품명:</label> <select id="part_name" name="part_name" style="width:300px;"></select>
+        <label>ALC 코드:</label> <select name="alc">
             <option value="">선택 안함</option>
             {% for a in alcs %}
-            <option value="{{ a }}" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
+                <option value="{{ a }}" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
             {% endfor %}
         </select>
-
         <button type="submit">조회</button>
     </form>
-
-    <p style="color:red">
-        시작 날짜와 종료 날짜는 필수!<br>
-        부품명, ALC 코드 또는 차종을 입력해주세요.<br>
-        부품명 입력 시 부품의 전체 ALC코드의 생산량을 볼 수 있고,<br>
-        ALC 코드를 입력 시 단일 부품만 확인할 수 있습니다.<br>
-        매일 오전 9시에 전날 생산량을 업데이트합니다. 참고바랍니다.
-    </p>
-
-    {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
     {% if data is not none %}
-        <table border="1">
-            <thead>
+        <table border="1" cellpadding="5" cellspacing="0">
+            <tr>
+                {% for col in data.columns %}<th>{{ col }}</th>{% endfor %}
+            </tr>
+            {% for row in data.values.tolist() %}
                 <tr>
-                    {% for col in data.columns %}<th>{{ col }}</th>{% endfor %}
+                    {% for item in row %}<td>{{ item }}</td>{% endfor %}
                 </tr>
-            </thead>
-            <tbody>
-                {% for _, row in data.iterrows() %}
-                <tr>
-                    {% for col in data.columns %}<td>{{ row[col] }}</td>{% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
+            {% endfor %}
         </table>
     {% endif %}
-
     <script>
         $(document).ready(function() {
             $('#model').select2({
@@ -98,51 +83,28 @@ HTML_TEMPLATE = """
                     url: '/autocomplete_model',
                     dataType: 'json',
                     delay: 250,
-                    data: function (params) {
-                        return { term: params.term };
-                    },
-                    processResults: function (data) {
-                        return { results: data.map(function(item) { return { id: item, text: item }; }) };
-                    },
+                    data: function(params) { return { term: params.term }; },
+                    processResults: function(data) { return { results: data.map(d => ({ id: d, text: d })) }; },
                     cache: true
                 }
             });
-
             $('#part_name').select2({
                 placeholder: '부품명을 입력하세요',
                 ajax: {
                     url: '/autocomplete_part_name',
                     dataType: 'json',
                     delay: 250,
-                    data: function (params) {
-                        return { term: params.term };
-                    },
-                    processResults: function (data) {
-                        return { results: data.map(function(item) { return { id: item, text: item }; }) };
-                    },
+                    data: function(params) { return { term: params.term }; },
+                    processResults: function(data) { return { results: data.map(d => ({ id: d, text: d })) }; },
                     cache: true
-                }
-            });
-
-            $('#model, #part_name').on('change', function() {
-                const model = $('#model').val();
-                const part = $('#part_name').val();
-                if (model && part) {
-                    $.getJSON('/related_alc', { model: model, part_name: part }, function(data) {
-                        $('#alc').empty().append('<option value="">선택 안함</option>');
-                        $.each(data, function(i, val) {
-                            $('#alc').append('<option value="' + val + '">' + val + '</option>');
-                        });
-                    });
                 }
             });
         });
     </script>
 </body>
 </html>
-"""
+'''
 
-# index 라우트
 @app.route("/")
 def index():
     start_date = request.args.get('start_date')
