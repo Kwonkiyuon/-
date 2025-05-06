@@ -26,9 +26,10 @@ DF_ORIGINAL['부품 번호'] = DF_ORIGINAL['부품 번호'].astype(str).str.uppe
 
 # HTML 템플릿 정의
 HTML_TEMPLATE = """
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>다차종 일일 생산량 조회</title>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -36,67 +37,101 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <h2>다차종 일일 생산량 조회</h2>
+    <img src="/static/현대인 마크.png" alt="현대인 로고" style="float:right; height:50px;">
+
     <form method="get">
         시작 날짜: <input type="date" name="start_date" value="{{ request.args.get('start_date', '') }}">
         종료 날짜: <input type="date" name="end_date" value="{{ request.args.get('end_date', '') }}">
-        차종: <select id="model" name="model" style="width:200px"></select>
-        부품명: <select id="part_name" name="part_name" style="width:300px"></select>
-        ALC 코드: <select id="alc" name="alc">
+
+        차종:
+        <select id="model" name="model" style="width:200px">
+            <option value="">선택 안함</option>
+        </select>
+
+        부품명:
+        <select id="part_name" name="part_name" style="width:300px">
+            <option value="">선택 안함</option>
+        </select>
+
+        ALC 코드:
+        <select id="alc" name="alc">
             <option value="">선택 안함</option>
             {% for a in alcs %}
-                <option value="{{ a }}" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
+            <option value="{{ a }}" {% if a == request.args.get('alc', '') %}selected{% endif %}>{{ a }}</option>
             {% endfor %}
         </select>
+
         <button type="submit">조회</button>
     </form>
+
+    <p style="color:red">
+        시작 날짜와 종료 날짜는 필수!<br>
+        부품명, ALC 코드 또는 차종을 입력해주세요.<br>
+        부품명 입력 시 부품의 전체 ALC코드의 생산량을 볼 수 있고,<br>
+        ALC 코드를 입력 시 단일 부품만 확인할 수 있습니다.<br>
+        매일 오전 9시에 전날 생산량을 업데이트합니다. 참고바랍니다.
+    </p>
 
     {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
     {% if data is not none %}
         <table border="1">
-            <thead><tr>{% for col in data.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+            <thead>
+                <tr>
+                    {% for col in data.columns %}<th>{{ col }}</th>{% endfor %}
+                </tr>
+            </thead>
             <tbody>
-            {% for row in data.itertuples() %}
-                <tr>{% for value in row[1:] %}<td>{{ value }}</td>{% endfor %}</tr>
-            {% endfor %}
+                {% for _, row in data.iterrows() %}
+                <tr>
+                    {% for col in data.columns %}<td>{{ row[col] }}</td>{% endfor %}
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     {% endif %}
 
     <script>
-        function initSelect2(id, url, defaultValue) {
-            $(id).select2({
+        $(document).ready(function() {
+            $('#model').select2({
+                placeholder: '차종을 입력하세요',
                 ajax: {
-                    url: url,
+                    url: '/autocomplete_model',
                     dataType: 'json',
                     delay: 250,
                     data: function (params) {
                         return { term: params.term };
                     },
                     processResults: function (data) {
-                        return { results: data.map(d => ({ id: d, text: d })) };
-                    }
-                },
-                placeholder: '검색 또는 선택...',
-                allowClear: true
+                        return { results: data.map(function(item) { return { id: item, text: item }; }) };
+                    },
+                    cache: true
+                }
             });
-            if (defaultValue) {
-                var option = new Option(defaultValue, defaultValue, true, true);
-                $(id).append(option).trigger('change');
-            }
-        }
 
-        $(document).ready(function () {
-            initSelect2('#part_name', '/autocomplete_part_name', '{{ request.args.get('part_name', '') }}');
-            initSelect2('#model', '/autocomplete_model', '{{ request.args.get('model', '') }}');
+            $('#part_name').select2({
+                placeholder: '부품명을 입력하세요',
+                ajax: {
+                    url: '/autocomplete_part_name',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return { term: params.term };
+                    },
+                    processResults: function (data) {
+                        return { results: data.map(function(item) { return { id: item, text: item }; }) };
+                    },
+                    cache: true
+                }
+            });
 
-            $('#part_name, #model').on('change', function () {
-                var part = $('#part_name').val();
-                var model = $('#model').val();
-                if (part && model) {
-                    $.getJSON('/related_alc', { part_name: part, model: model }, function (data) {
+            $('#model, #part_name').on('change', function() {
+                const model = $('#model').val();
+                const part = $('#part_name').val();
+                if (model && part) {
+                    $.getJSON('/related_alc', { model: model, part_name: part }, function(data) {
                         $('#alc').empty().append('<option value="">선택 안함</option>');
-                        data.forEach(function (item) {
-                            $('#alc').append('<option value="' + item + '">' + item + '</option>');
+                        $.each(data, function(i, val) {
+                            $('#alc').append('<option value="' + val + '">' + val + '</option>');
                         });
                     });
                 }
